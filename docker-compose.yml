@@ -1,0 +1,79 @@
+version: '3.9'
+
+networks: 
+    tick-stack-net:
+        driver: bridge
+
+volumes:
+    tick-stack-data:
+
+services:
+    influxdb:
+        image: influxdb:latest
+        container_name: influxdb
+        ports:
+            - 8086:8086
+        environment:
+            INFLUXDB_HTTP_AUTH_ENABLED: "true"
+            INFLUXDB_DB: "tick-stack-db"
+            INFLUXDB_ADMIN_USER: "tick-stack-user"
+            INFLUXDB_ADMIN_PASSWORD: "tick-stack-pwd"
+        networks: 
+            - tick-stack-net
+        volumes:
+            - tick-stack-data:/var/lib/influxdb
+
+    telegraf:
+        image: telegraf:latest
+        depends_on: 
+            - "influxdb"
+        environment:
+            HOST_NAME: "telegraf"
+            INFLUXDB_HOST: "influxdb"
+            INFLUXDB_PORT: "8086"
+            DATABASE: "tick-stack-db"
+        volumes:
+            - ./telegraf.conf:/etc/telegraf/telegraf.conf
+        tty: true
+        networks: 
+            - tick-stack-net
+        privileged: true
+        
+    kapacitor:
+        image: kapacitor:latest
+        container_name: kapacitor
+        depends_on: 
+            - "influxdb"
+        ports:
+            - 8087:8087
+        environment:
+            HOST_NAME: "kapacitor"
+            INFLUXDB_HOST: "influxdb"
+            INFLUXDB_PORT: "8086"
+            DATABASE: "tick-stack-db"
+        networks: 
+            - tick-stack-net
+    
+    chronograf:
+        image: chronograf:latest
+        container_name: chronograf
+        depends_on: 
+            - "influxdb"
+            - "kapacitor"
+        ports:
+            - mode: ingress
+              target: 8888
+              published: 8001
+              protocol: tcp
+        environment:
+            HOST_NAME: "chronograf"
+            INFLUXDB_HOST: "influxdb"
+            INFLUXDB_PORT: "8086"
+            DATABASE: "tick-stack-db"
+            KAPACITOR_HOST: "kapacitor"
+            KAPACITOR_PORT: "8087"
+        networks: 
+            - tick-stack-net
+
+        
+    
